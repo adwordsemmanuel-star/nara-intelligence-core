@@ -1,0 +1,6 @@
+node_modules/
+.env
+*.log
+*.py
+temp_htaccess
+test_ftp.txt

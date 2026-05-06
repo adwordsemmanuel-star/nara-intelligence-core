@@ -1,0 +1,16 @@
+{
+  "name": "nara-whatsapp-poc",
+  "version": "1.0.0",
+  "description": "WhatsApp Cloud API to Supabase PoC",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0",
+    "axios": "^1.16.0",
+    "csv-parser": "^3.2.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2"
+  }
+}
