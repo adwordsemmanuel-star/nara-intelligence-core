@@ -55,71 +55,96 @@ app.get('/webhook', (req, res) => {
 
 // Endpoint to Receive WhatsApp Messages
 app.post('/webhook', async (req, res) => {
-  console.log('\n==============================================');
-  console.log('📢 ¡PETICIÓN POST RECIBIDA EN /WEBHOOK!');
-  console.log('==============================================\n');
-  console.log(JSON.stringify(req.body, null, 2));
-
-  
   // Meta expects a 200 OK immediately
   res.sendStatus(200);
 
   try {
-    let body = req.body;
-
-    console.log("--- Nuevo evento de WhatsApp recibido ---");
-    console.log(JSON.stringify(body, null, 2));
+    const body = req.body;
 
     if (body.object === 'whatsapp_business_account') {
-      for (let entry of body.entry) {
-        for (let change of entry.changes) {
+      for (const entry of body.entry) {
+        for (const change of entry.changes) {
           if (change.value && change.value.messages && change.value.messages[0]) {
-            let message = change.value.messages[0];
-            let contact = change.value.contacts ? change.value.contacts[0] : null;
+            const message = change.value.messages[0];
+            const contactInfo = change.value.contacts ? change.value.contacts[0] : null;
 
-            let phone_number = message.from;
-            let text = message.text ? message.text.body : 'Mensaje sin texto (imagen/audio)';
-            
-            // Safer timestamp parsing
-            let timestamp;
-            try {
-              timestamp = message.timestamp ? new Date(parseInt(message.timestamp) * 1000).toISOString() : new Date().toISOString();
-            } catch (e) {
-              timestamp = new Date().toISOString();
-            }
-
-            let contact_name = contact && contact.profile ? contact.profile.name : 'Desconocido';
+            const phone_number = message.from;
+            const text = message.text ? message.text.body : 'Mensaje multimedia';
+            const contact_name = contactInfo?.profile?.name || 'Nuevo Contacto';
+            const timestamp = new Date().toISOString();
 
             console.log(`📩 Mensaje de ${contact_name} (${phone_number}): ${text}`);
 
+            if (!supabase) return;
 
-            // Insert into Supabase if configured
-            if (supabase) {
-              const { data, error } = await supabase
-                .from('mensajes_prueba')
-                .insert([
-                  { 
-                    telefono: phone_number, 
-                    nombre_contacto: contact_name,
-                    mensaje: text,
-                    fecha_recibido: timestamp
-                  }
-                ]);
+            // 1. Obtener o crear el contacto
+            let { data: contact, error: contactError } = await supabase
+              .from('contactos')
+              .select('id')
+              .eq('telefono', phone_number)
+              .single();
 
-              if (error) {
-                console.error('❌ Error guardando en Supabase:', error.message);
-              } else {
-                console.log('💾 Mensaje guardado exitosamente en la base de datos (Supabase).');
-              }
+            if (!contact) {
+              const { data: newContact, error: createError } = await supabase
+                .from('contactos')
+                .insert([{ 
+                  telefono: phone_number, 
+                  nombre: contact_name, 
+                  fuente: 'Meta',
+                  estado: 'nuevo' 
+                }])
+                .select()
+                .single();
+              
+              if (createError) throw createError;
+              contact = newContact;
+            }
+
+            // 2. Obtener o crear conversación activa
+            let { data: conversation, error: convError } = await supabase
+              .from('conversaciones')
+              .select('id')
+              .eq('contacto_id', contact.id)
+              .eq('estado', 'activa')
+              .single();
+
+            if (!conversation) {
+              const { data: newConv, error: createConvError } = await supabase
+                .from('conversaciones')
+                .insert([{ 
+                  contacto_id: contact.id, 
+                  estado: 'activa' 
+                }])
+                .select()
+                .single();
+              
+              if (createConvError) throw createConvError;
+              conversation = newConv;
+            }
+
+            // 3. Insertar el mensaje en la tabla real
+            const { error: msgError } = await supabase
+              .from('mensajes')
+              .insert([{
+                conversacion_id: conversation.id,
+                contacto_id: contact.id,
+                direccion: 'entrante',
+                tipo: message.type || 'text',
+                contenido: text,
+                created_at: timestamp
+              }]);
+
+            if (msgError) {
+              console.error('❌ Error guardando mensaje:', msgError.message);
             } else {
-               console.log('⚠️ Supabase no está configurado en tu .env. El mensaje no se guardó en BD.');
+              console.log('💾 Mensaje sincronizado con el Panel de Control.');
             }
           }
         }
       }
     }
   } catch (error) {
-    console.error('Error procesando el Webhook:', error);
+    console.error('Error procesando el Webhook:', error.message);
   }
 });
 

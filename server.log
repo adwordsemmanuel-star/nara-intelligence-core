@@ -1,0 +1,93 @@
+🚀 Servidor de Prueba NARA corriendo en http://localhost:3000
+Próximo paso: Levanta tu túnel Ngrok en otra terminal corriendo -> npx ngrok http 3000
+[2026-05-05T07:38:19.860Z] POST /webhook
+
+==============================================
+📢 ¡PETICIÓN POST RECIBIDA EN /WEBHOOK!
+==============================================
+
+{
+  "object": "whatsapp_business_account",
+  "entry": [
+    {
+      "id": "0",
+      "changes": [
+        {
+          "field": "messages",
+          "value": {
+            "messaging_product": "whatsapp",
+            "metadata": {
+              "display_phone_number": "16505551111",
+              "phone_number_id": "123456123"
+            },
+            "contacts": [
+              {
+                "profile": {
+                  "name": "test user name"
+                },
+                "wa_id": "16315551181",
+                "user_id": "US.13491208655302741918"
+              }
+            ],
+            "messages": [
+              {
+                "id": "ABGGFlA5Fpa",
+                "timestamp": "1504902988",
+                "from": "16315551181",
+                "from_user_id": "US.13491208655302741918",
+                "type": "text",
+                "text": {
+                  "body": "this is a text message"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
+--- Nuevo evento de WhatsApp recibido ---
+{
+  "object": "whatsapp_business_account",
+  "entry": [
+    {
+      "id": "0",
+      "changes": [
+        {
+          "field": "messages",
+          "value": {
+            "messaging_product": "whatsapp",
+            "metadata": {
+              "display_phone_number": "16505551111",
+              "phone_number_id": "123456123"
+            },
+            "contacts": [
+              {
+                "profile": {
+                  "name": "test user name"
+                },
+                "wa_id": "16315551181",
+                "user_id": "US.13491208655302741918"
+              }
+            ],
+            "messages": [
+              {
+                "id": "ABGGFlA5Fpa",
+                "timestamp": "1504902988",
+                "from": "16315551181",
+                "from_user_id": "US.13491208655302741918",
+                "type": "text",
+                "text": {
+                  "body": "this is a text message"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
+📩 Mensaje de test user name (16315551181): this is a text message
+💾 Mensaje guardado exitosamente en la base de datos (Supabase).

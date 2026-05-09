@@ -1,0 +1,43 @@
+{
+  "categorias": [
+    {
+      "nombre": "Bienvenida y Calificación",
+      "respuestas": [
+        {
+          "etiqueta": "Saludo Inicial",
+          "texto": "¡Hola! Qué gusto saludarte. Soy NARA, asistente virtual de NARA Psychology. 👋 Vi que nos contactaste por nuestro anuncio. ¿En qué podemos apoyarte hoy?"
+        },
+        {
+          "etiqueta": "Preguntar Nombre",
+          "texto": "Un gusto saludarte. Para darte una mejor atención, ¿podrías decirme tu nombre y el motivo de tu consulta?"
+        }
+      ]
+    },
+    {
+      "nombre": "Precios y Tarifas",
+      "respuestas": [
+        {
+          "etiqueta": "Tarifas Individual",
+          "texto": "Para Terapia Individual, el Dr. Emmanuel tiene una tarifa de $1,300 y las especialistas de $1,000. ¿Te gustaría agendar una valoración?"
+        },
+        {
+          "etiqueta": "Tarifas Pareja",
+          "texto": "Para Terapia de Pareja, el Dr. Emmanuel tiene una tarifa de $1,400 y las especialistas de $1,200. ¿Te gustaría que revisemos disponibilidad?"
+        },
+        {
+          "etiqueta": "Paquete Niños",
+          "texto": "Nuestra especialista es Aracelly Rodríguez. La sesión individual cuesta $1,000, pero tenemos un paquete recomendado de 5 sesiones por $3,600. ¿Te interesa?"
+        }
+      ]
+    },
+    {
+      "nombre": "Cierre y Pago",
+      "respuestas": [
+        {
+          "etiqueta": "Confirmación Slot",
+          "texto": "¡Excelente decisión! He apartado tu espacio para el [Día/Hora]. Tu lugar queda reservado temporalmente por 2 horas para recibir el comprobante. Puedes realizar el pago aquí: [LINK_PAGO]"
+        }
+      ]
+    }
+  ]
+}
