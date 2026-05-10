@@ -73,22 +73,13 @@ app.post('/webhook', async (req, res) => {
 
 
 const ALMA_PROMPT = `
-Eres ALMA, la asistente virtual de NARA Psychology. Tu misión es ayudar a los pacientes a entender nuestros servicios y agendar citas.
+Eres ALMA, la asistente virtual oficial de NARA Psychology. Tu misión es resolver dudas de pacientes y facilitar el agendamiento basándote EXCLUSIVAMENTE en el CONOCIMIENTO OFICIAL proporcionado abajo.
 
-DIRECTRICES DE PERSONALIDAD:
+DIRECTRICES:
 - Sé cálida, profesional y concisa.
-- MEMORIA: Si en el historial ya te presentaste como ALMA, NO vuelvas a hacerlo. Habla con naturalidad, como una continuación de la charla. Solo preséntate si es el PRIMER mensaje de la conversación.
-
-REGLAS DE CONVERSACIÓN:
-1. RESPUESTA PUNTUAL: Responde directamente a lo que el usuario pregunta.
-2. CONTINUIDAD: Usa el historial para no repetir información que ya diste.
-3. CIERRE ACTIVO: Al final de tu respuesta, haz una pregunta breve para avanzar (ej: "¿Te gustaría revisar horarios?", "¿Deseas saber más de Emmanuel?").
-
-DATOS OFICIALES:
-- Duración: 50 minutos por sesión.
-- Terapia Pareja: Emmanuel ($1,400), Especialistas ($1,200).
-- Individual: Emmanuel ($1,300), Especialistas ($1,000).
-- Niños: Aracelly ($1,000 / Paquete 5 x $3,600).
+- No inventes precios ni servicios. Si no tienes la información, ofrece canalizar con un humano.
+- MEMORIA: Si ya te presentaste en el historial, continúa la charla con naturalidad sin repetir tu nombre.
+- CIERRE: Termina siempre con una pregunta breve para avanzar en la cita.
 `;
 
 // --- 2. AGENTE INTELIGENTE ---
@@ -107,14 +98,14 @@ listAvailableModels();
 async function runAgentLogic(conversacion_id, contacto_id, text) {
   console.log(`🤖 ALMA activada para conv: ${conversacion_id}`);
   try {
-    // 1. ALINEACIÓN CON CONTROL CENTER (Esquema real)
-    const { data: configData } = await supabase
-        .from('admin_config')
-        .select('value')
-        .eq('key', 'operational_mode')
-        .single();
+    // 1. ALINEACIÓN CON CONTROL CENTER Y RECUPERACIÓN DE MEMORIA (RAG)
+    const [configRes, knowledgeRes] = await Promise.all([
+      supabase.from('admin_config').select('value').eq('key', 'operational_mode').single(),
+      supabase.from('nara_knowledge').select('contenido')
+    ]);
     
-    const operationalMode = configData?.value?.mode || 'intelligent';
+    const operationalMode = configRes.data?.value?.mode || 'intelligent';
+    const knowledgeBase = knowledgeRes.data?.map(k => k.contenido).join('\n') || 'No hay información adicional.';
 
     if (operationalMode !== 'intelligent') {
       console.log(`⚠️ MODO ${operationalMode.toUpperCase()} activo. ALMA en silencio.`);
@@ -147,11 +138,12 @@ async function runAgentLogic(conversacion_id, contacto_id, text) {
     for (const modelName of modelsToTry) {
       try {
         console.log(`📡 Intentando con: ${modelName} (v1beta)...`);
-        // CAMBIO CRÍTICO: v1 -> v1beta para soportar Gemini 2.x
         const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/${modelName}:generateContent?key=${process.env.GEMINI_API_KEY}`;
         
+        const fullPrompt = `${ALMA_PROMPT}\n\n### CONOCIMIENTO OFICIAL NARA:\n${knowledgeBase}\n\n### HISTORIAL RECIENTE:\n${formattedHistory}\n\n### USUARIO:\n${text}`;
+
         response = await axios.post(geminiUrl, {
-          contents: [{ parts: [{ text: ALMA_PROMPT + "\n\nHistorial:\n" + formattedHistory + "\n\nUsuario: " + text }] }],
+          contents: [{ parts: [{ text: fullPrompt }] }],
           generationConfig: { temperature: 0.7, maxOutputTokens: 1000 }
         });
         success = true;
