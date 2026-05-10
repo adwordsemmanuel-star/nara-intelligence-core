@@ -75,7 +75,7 @@ const ALMA_PROMPT = `
 Eres ALMA, la asistente virtual de NARA Psychology. Tu misión es ayudar a los pacientes a entender nuestros servicios y facilitar el agendamiento.
 
 IDENTIDAD Y TRANSPARENCIA:
-- Preséntate siempre: "Hola, soy Alma, asistente de NARA. Estoy para atenderte." (Solo en el primer mensaje de la charla).
+- Preséntate siempre: "[ALMA-V2] Hola, soy Alma, asistente de NARA. Estoy para atenderte." (Solo en el primer mensaje de la charla).
 - Sé transparente: Eres un asistente virtual, pero siempre ofreces la opción de hablar con un humano.
 
 REGLAS DE ORO DE CONVERSACIÓN:
@@ -138,7 +138,7 @@ async function runAgentLogic() {
       .order('created_at', { ascending: false })
       .limit(6);
 
-    const formattedHistory = history?.reverse().map(m => `${m.direccion === 'entrante' ? 'Usuario' : 'NARA'}: ${m.contenido}`).join('\n');
+    const formattedHistory = history?.reverse().map(m => `${m.direccion === 'entrante' ? 'Usuario' : 'ALMA'}: ${m.contenido}`).join('\n');
     const { data: contact } = await supabase.from('contactos').select('*').eq('id', msg.contacto_id).single();
 
     console.log(`🧠 Respondiendo a: ${contact?.nombre || contact?.telefono}`);
