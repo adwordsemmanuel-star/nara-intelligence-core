@@ -104,10 +104,10 @@ async function runAgentLogic() {
       return;
     }
 
-    // 2. Buscar nuevos mensajes
+    // 2. Buscar nuevos mensajes (Simplificado para evitar errores de relación)
     const { data: messages, error } = await supabase
       .from('mensajes')
-      .select('*, contactos(*)')
+      .select('*')
       .eq('direccion', 'entrante')
       .order('created_at', { ascending: false })
       .limit(5);
@@ -118,15 +118,15 @@ async function runAgentLogic() {
       if (processedIds.has(msg.id)) continue;
       processedIds.add(msg.id);
 
-      const contact = msg.contactos;
-      const chatHistory = `Usuario: ${msg.contenido}`;
-
-      console.log(`🧠 Pensando respuesta para ${contact.nombre || contact.telefono}...`);
-
       // 3. Generar respuesta con Gemini
+      const { data: contact } = await supabase.from('contactos').select('*').eq('id', msg.contacto_id).single();
+      const chatHistory = `Usuario: ${msg.contenido}`;
+      
+      console.log(`🧠 Pensando respuesta para ${contact?.nombre || contact?.telefono || 'Desconocido'}...`);
+
       const result = await model.generateContent([
         { text: NARA_PROMPT },
-        { text: `Contexto del paciente: ${JSON.stringify(contact)}` },
+        { text: `Contexto del paciente: ${JSON.stringify(contact || {})}` },
         { text: chatHistory }
       ]);
       
