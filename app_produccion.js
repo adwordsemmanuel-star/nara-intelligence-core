@@ -120,23 +120,23 @@ async function runAgentLogic(conversacion_id, contacto_id, text) {
     const formattedHistory = history?.reverse().map(m => `${m.direccion === 'entrante' ? 'Usuario' : 'ALMA'}: ${m.contenido}`).join('\n');
     const { data: contact } = await supabase.from('contactos').select('*').eq('id', contacto_id).single();
 
-    console.log(`🧠 Procesando IA para: ${contact?.nombre}`);
-
-    // Llamada DIRECTA a la API de Google (sin SDK)
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`;
+    // Llamada DIRECTA y RESILIENTE a Google (v1)
+    let geminiUrl = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`;
+    let response;
     
-    const response = await axios.post(geminiUrl, {
-      contents: [
-        {
-          role: "user",
-          parts: [{ text: ALMA_PROMPT + "\n\nHistorial:\n" + formattedHistory + "\n\nUsuario: " + text }]
-        }
-      ],
-      generationConfig: {
-        temperature: 0.7,
-        maxOutputTokens: 500,
-      }
-    });
+    try {
+      response = await axios.post(geminiUrl, {
+        contents: [{ role: "user", parts: [{ text: ALMA_PROMPT + "\n\nHistorial:\n" + formattedHistory + "\n\nUsuario: " + text }] }],
+        generationConfig: { temperature: 0.7, maxOutputTokens: 800 }
+      });
+    } catch (flashError) {
+      console.log('⚠️ Flash no disponible, intentando con Gemini-Pro...');
+      geminiUrl = `https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key=${process.env.GEMINI_API_KEY}`;
+      response = await axios.post(geminiUrl, {
+        contents: [{ role: "user", parts: [{ text: ALMA_PROMPT + "\n\nHistorial:\n" + formattedHistory + "\n\nUsuario: " + text }] }],
+        generationConfig: { temperature: 0.7, maxOutputTokens: 800 }
+      });
+    }
 
     const responseText = response.data.candidates[0].content.parts[0].text;
     
