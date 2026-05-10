@@ -58,6 +58,9 @@ app.post('/webhook', async (req, res) => {
               direccion: 'entrante',
               contenido: text
             }]);
+
+            // Lanzar lógica del agente inmediatamente
+            runAgentLogic(conv.id, contactId, text);
           }
         }
       }
@@ -75,7 +78,7 @@ const ALMA_PROMPT = `
 Eres ALMA, la asistente virtual de NARA Psychology. Tu misión es ayudar a los pacientes a entender nuestros servicios y facilitar el agendamiento.
 
 IDENTIDAD Y TRANSPARENCIA:
-- Preséntate siempre: "[ALMA-V2] Hola, soy Alma, asistente de NARA. Estoy para atenderte." (Solo en el primer mensaje de la charla).
+- Preséntate siempre: "[ALMA-V3] Hola, soy Alma, asistente de NARA. Estoy para atenderte." (Solo en el primer mensaje de la charla).
 - Sé transparente: Eres un asistente virtual, pero siempre ofreces la opción de hablar con un humano.
 
 REGLAS DE ORO DE CONVERSACIÓN:
@@ -99,62 +102,41 @@ MODO DE OPERACIÓN:
 
 // --- 2. AGENTE INTELIGENTE ---
 
-let processedIds = new Set();
-
-async function runAgentLogic() {
+async function runAgentLogic(conversacion_id, contacto_id, text) {
+  console.log(`🤖 ALMA activada para conv: ${conversacion_id}`);
   try {
     const { data: config } = await supabase.from('admin_config').select('operational_mode').single();
-    if (config?.operational_mode === 'emergency') return;
-
-    // Obtener el último mensaje entrante GLOBAL para procesar de uno en uno
-    const { data: messages, error } = await supabase
-      .from('mensajes')
-      .select('*')
-      .eq('direccion', 'entrante')
-      .order('created_at', { ascending: false })
-      .limit(1);
-
-    if (error || !messages || messages.length === 0) return;
-
-    const msg = messages[0];
-    if (processedIds.has(msg.id)) return;
-    processedIds.add(msg.id);
-
-    // Verificar si ya respondimos a este mensaje específico (para evitar doble respuesta al reiniciar)
-    const { data: alreadyReplied } = await supabase
-      .from('mensajes')
-      .select('id')
-      .eq('conversacion_id', msg.conversacion_id)
-      .eq('direccion', 'saliente')
-      .gt('created_at', msg.created_at);
-
-    if (alreadyReplied && alreadyReplied.length > 0) return;
+    if (config?.operational_mode === 'emergency') {
+      console.log('⚠️ Modo emergencia activo. ALMA no responderá.');
+      return;
+    }
 
     // Obtener Historial
     const { data: history } = await supabase
       .from('mensajes')
       .select('direccion, contenido')
-      .eq('conversacion_id', msg.conversacion_id)
+      .eq('conversacion_id', conversacion_id)
       .order('created_at', { ascending: false })
       .limit(6);
 
     const formattedHistory = history?.reverse().map(m => `${m.direccion === 'entrante' ? 'Usuario' : 'ALMA'}: ${m.contenido}`).join('\n');
-    const { data: contact } = await supabase.from('contactos').select('*').eq('id', msg.contacto_id).single();
+    const { data: contact } = await supabase.from('contactos').select('*').eq('id', contacto_id).single();
 
-    console.log(`🧠 Respondiendo a: ${contact?.nombre || contact?.telefono}`);
+    console.log(`🧠 Procesando respuesta para: ${contact?.nombre}`);
 
     const result = await model.generateContent([
       { text: ALMA_PROMPT },
       { text: `Historial:\n${formattedHistory}` },
-      { text: `Pregunta actual: ${msg.contenido}` }
+      { text: `Pregunta actual: ${text}` }
     ]);
     
     const responseText = result.response.text();
-    await sendWhatsAppMessage(contact.telefono, responseText, msg.conversacion_id, contact.id);
-    console.log(`✅ Respuesta con memoria enviada.`);
+    console.log(`📤 Enviando respuesta de ALMA...`);
+    await sendWhatsAppMessage(contact.telefono, responseText, conversacion_id, contacto_id);
+    console.log(`✅ Respuesta enviada exitosamente.`);
     
   } catch (e) { 
-    console.error('❌ Error Agente:', e.message); 
+    console.error('❌ Error en ALMA Logic:', e.message); 
   }
 }
 
@@ -182,10 +164,7 @@ async function sendWhatsAppMessage(telefono, mensaje, conversacion_id, contacto_
   }
 }
 
-// Iniciar monitoreo
-setInterval(runAgentLogic, 10000);
-
-// --- 3. DASHBOARD API ---
+// --- 3. DASHBOARD API (Para mensajes manuales) ---
 app.post('/send-message', async (req, res) => {
   const { telefono, mensaje, conversacion_id, contacto_id } = req.body;
   try {
@@ -208,6 +187,7 @@ app.post('/send-message', async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Iniciar servidor
 app.listen(port, () => {
-  console.log(`🚀 NARA CORE v3.6 Unificado en puerto ${port}`);
+  console.log(`🚀 ALMA CORE v3.7 Activa en puerto ${port}`);
 });
