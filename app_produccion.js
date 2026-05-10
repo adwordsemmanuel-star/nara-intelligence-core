@@ -133,23 +133,25 @@ async function runAgentLogic(conversacion_id, contacto_id, text) {
 
     console.log(`🧠 Procesando IA para: ${contact?.nombre}`);
 
-    // Lista de modelos a intentar (en orden)
-    const modelsToTry = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-pro', 'gemini-1.0-pro'];
+    // Lista de modelos a intentar (usando el nombre completo que Google nos dio)
+    const modelsToTry = ['models/gemini-1.5-flash', 'models/gemini-1.5-pro', 'models/gemini-pro', 'models/gemini-1.0-pro'];
     let response;
     let success = false;
 
     for (const modelName of modelsToTry) {
       try {
-        console.log(`📡 Intentando con modelo: ${modelName}...`);
-        const geminiUrl = `https://generativelanguage.googleapis.com/v1/models/${modelName}:generateContent?key=${process.env.GEMINI_API_KEY}`;
+        console.log(`📡 Intentando con: ${modelName}...`);
+        // La URL debe ser: v1/models/nombre:generateContent
+        const geminiUrl = `https://generativelanguage.googleapis.com/v1/${modelName}:generateContent?key=${process.env.GEMINI_API_KEY}`;
+        
         response = await axios.post(geminiUrl, {
-          contents: [{ role: "user", parts: [{ text: ALMA_PROMPT + "\n\nHistorial:\n" + formattedHistory + "\n\nUsuario: " + text }] }],
+          contents: [{ parts: [{ text: ALMA_PROMPT + "\n\nHistorial:\n" + formattedHistory + "\n\nUsuario: " + text }] }],
           generationConfig: { temperature: 0.7, maxOutputTokens: 800 }
         });
         success = true;
         break; 
       } catch (err) {
-        console.log(`❌ Falló ${modelName} (404/Error).`);
+        console.log(`❌ Falló ${modelName}:`, err.response?.data?.error?.message || err.message);
       }
     }
 
