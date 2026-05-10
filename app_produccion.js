@@ -68,20 +68,9 @@ app.post('/webhook', async (req, res) => {
   } catch (e) { console.error('❌ Error Webhook:', e.message); }
 });
 
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+// Conexión Directa por API activa
 
-// --- CONFIGURACIÓN IA ---
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-let model = genAI.getGenerativeModel({ model: "gemini-pro" });
 
-// Función para listar modelos (ayuda a depurar en el log)
-async function listModels() {
-  try {
-    console.log('🔍 Listando modelos disponibles...');
-    // Nota: El SDK de Node a veces no tiene listModels directo, pero intentaremos inicializar Pro.
-  } catch (e) { console.log('⚠️ No se pudo listar modelos.'); }
-}
-listModels();
 
 const ALMA_PROMPT = `
 Eres ALMA, la asistente virtual de NARA Psychology. Tu misión es ayudar a los pacientes a entender nuestros servicios y facilitar el agendamiento.
@@ -131,21 +120,32 @@ async function runAgentLogic(conversacion_id, contacto_id, text) {
     const formattedHistory = history?.reverse().map(m => `${m.direccion === 'entrante' ? 'Usuario' : 'ALMA'}: ${m.contenido}`).join('\n');
     const { data: contact } = await supabase.from('contactos').select('*').eq('id', contacto_id).single();
 
-    console.log(`🧠 Procesando respuesta para: ${contact?.nombre}`);
+    console.log(`🧠 Procesando IA para: ${contact?.nombre}`);
 
-    const result = await model.generateContent([
-      { text: ALMA_PROMPT },
-      { text: `Historial:\n${formattedHistory}` },
-      { text: `Pregunta actual: ${text}` }
-    ]);
+    // Llamada DIRECTA a la API de Google (sin SDK)
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`;
     
-    const responseText = result.response.text();
+    const response = await axios.post(geminiUrl, {
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: ALMA_PROMPT + "\n\nHistorial:\n" + formattedHistory + "\n\nUsuario: " + text }]
+        }
+      ],
+      generationConfig: {
+        temperature: 0.7,
+        maxOutputTokens: 500,
+      }
+    });
+
+    const responseText = response.data.candidates[0].content.parts[0].text;
+    
     console.log(`📤 Enviando respuesta de ALMA...`);
     await sendWhatsAppMessage(contact.telefono, responseText, conversacion_id, contacto_id);
     console.log(`✅ Respuesta enviada exitosamente.`);
     
   } catch (e) { 
-    console.error('❌ Error en ALMA Logic:', e.message); 
+    console.error('❌ Error en ALMA Logic:', e.response?.data || e.message); 
   }
 }
 
