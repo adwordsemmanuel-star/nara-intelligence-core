@@ -114,9 +114,17 @@ listAvailableModels();
 async function runAgentLogic(conversacion_id, contacto_id, text) {
   console.log(`🤖 ALMA activada para conv: ${conversacion_id}`);
   try {
-    const { data: config } = await supabase.from('admin_config').select('operational_mode').single();
-    if (config?.operational_mode === 'emergency') {
-      console.log('⚠️ Modo emergencia activo. ALMA no responderá.');
+    // 1. ALINEACIÓN CON CONTROL CENTER (Esquema real)
+    const { data: configData } = await supabase
+        .from('admin_config')
+        .select('value')
+        .eq('key', 'operational_mode')
+        .single();
+    
+    const operationalMode = configData?.value?.mode || 'intelligent';
+
+    if (operationalMode !== 'intelligent') {
+      console.log(`⚠️ MODO ${operationalMode.toUpperCase()} activo. ALMA en silencio.`);
       return;
     }
 
@@ -133,20 +141,25 @@ async function runAgentLogic(conversacion_id, contacto_id, text) {
 
     console.log(`🧠 Procesando IA para: ${contact?.nombre}`);
 
-    // Lista de modelos a intentar (usando el nombre completo que Google nos dio)
-    const modelsToTry = ['models/gemini-1.5-flash', 'models/gemini-1.5-pro', 'models/gemini-pro', 'models/gemini-1.0-pro'];
+    // Lista de modelos a intentar (usando la lista real de tu llave)
+    const modelsToTry = [
+      'models/gemini-2.5-flash', 
+      'models/gemini-2.5-pro', 
+      'models/gemini-2.0-flash', 
+      'models/gemini-2.0-flash-lite'
+    ];
     let response;
     let success = false;
 
     for (const modelName of modelsToTry) {
       try {
-        console.log(`📡 Intentando con: ${modelName}...`);
-        // La URL debe ser: v1/models/nombre:generateContent
-        const geminiUrl = `https://generativelanguage.googleapis.com/v1/${modelName}:generateContent?key=${process.env.GEMINI_API_KEY}`;
+        console.log(`📡 Intentando con: ${modelName} (v1beta)...`);
+        // CAMBIO CRÍTICO: v1 -> v1beta para soportar Gemini 2.x
+        const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/${modelName}:generateContent?key=${process.env.GEMINI_API_KEY}`;
         
         response = await axios.post(geminiUrl, {
           contents: [{ parts: [{ text: ALMA_PROMPT + "\n\nHistorial:\n" + formattedHistory + "\n\nUsuario: " + text }] }],
-          generationConfig: { temperature: 0.7, maxOutputTokens: 800 }
+          generationConfig: { temperature: 0.7, maxOutputTokens: 1000 }
         });
         success = true;
         break; 
