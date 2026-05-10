@@ -118,23 +118,33 @@ async function runAgentLogic() {
       if (processedIds.has(msg.id)) continue;
       processedIds.add(msg.id);
 
-      // 3. Generar respuesta con Gemini
-      const { data: contact } = await supabase.from('contactos').select('*').eq('id', msg.contacto_id).single();
-      const chatHistory = `Usuario: ${msg.contenido}`;
-      
-      console.log(`🧠 Pensando respuesta para ${contact?.nombre || contact?.telefono || 'Desconocido'}...`);
+      // 3. Obtener Historial de la Conversación para darle MEMORIA
+      const { data: history } = await supabase
+        .from('mensajes')
+        .select('direccion, contenido')
+        .eq('conversacion_id', msg.conversacion_id)
+        .order('created_at', { ascending: false })
+        .limit(10);
 
+      const formattedHistory = history?.reverse().map(m => `${m.direccion === 'entrante' ? 'Usuario' : 'NARA'}: ${m.contenido}`).join('\n');
+
+      const { data: contact } = await supabase.from('contactos').select('*').eq('id', msg.contacto_id).single();
+      
+      console.log(`🧠 Pensando respuesta con memoria para ${contact?.nombre || contact?.telefono}...`);
+
+      // 4. Generar respuesta con Gemini usando el HISTORIAL
       const result = await model.generateContent([
         { text: NARA_PROMPT },
-        { text: `Contexto del paciente: ${JSON.stringify(contact || {})}` },
-        { text: chatHistory }
+        { text: `Información del Contacto: ${JSON.stringify(contact || {})}` },
+        { text: `Historial reciente de la charla:\n${formattedHistory}` },
+        { text: `Último mensaje recibido (RESPONDE A ESTE): ${msg.contenido}` }
       ]);
       
       const responseText = result.response.text();
 
-      // 4. Enviar a WhatsApp
+      // 5. Enviar a WhatsApp
       await sendWhatsAppMessage(contact.telefono, responseText, msg.conversacion_id, contact.id);
-      console.log(`✅ Respuesta enviada.`);
+      console.log(`✅ Respuesta con memoria enviada.`);
     }
     
   } catch (e) { 
