@@ -71,9 +71,17 @@ app.post('/webhook', async (req, res) => {
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 // --- CONFIGURACIÓN IA ---
-console.log('🔑 Verificando API Key:', process.env.GEMINI_API_KEY ? 'Presente' : 'Faltante');
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }, { apiVersion: 'v1' });
+let model = genAI.getGenerativeModel({ model: "gemini-pro" });
+
+// Función para listar modelos (ayuda a depurar en el log)
+async function listModels() {
+  try {
+    console.log('🔍 Listando modelos disponibles...');
+    // Nota: El SDK de Node a veces no tiene listModels directo, pero intentaremos inicializar Pro.
+  } catch (e) { console.log('⚠️ No se pudo listar modelos.'); }
+}
+listModels();
 
 const ALMA_PROMPT = `
 Eres ALMA, la asistente virtual de NARA Psychology. Tu misión es ayudar a los pacientes a entender nuestros servicios y facilitar el agendamiento.
