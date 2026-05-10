@@ -71,8 +71,9 @@ app.post('/webhook', async (req, res) => {
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 // --- CONFIGURACIÓN IA ---
+console.log('🔑 Verificando API Key:', process.env.GEMINI_API_KEY ? 'Presente' : 'Faltante');
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
+const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }, { apiVersion: 'v1' });
 
 const ALMA_PROMPT = `
 Eres ALMA, la asistente virtual de NARA Psychology. Tu misión es ayudar a los pacientes a entender nuestros servicios y facilitar el agendamiento.
