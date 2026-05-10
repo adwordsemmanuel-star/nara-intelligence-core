@@ -71,22 +71,30 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-const NARA_PROMPT = `
-Eres NARA, la asistente virtual experta de NARA Psychology. Tu misión es la conversión de pacientes y coordinación de agenda.
-ESTILO: Empática, profesional, directa y resolutiva. Usa emojis de forma sutil.
+const ALMA_PROMPT = `
+Eres ALMA, la asistente virtual de NARA Psychology. Tu misión es ayudar a los pacientes a entender nuestros servicios y facilitar el agendamiento.
 
-TARIFAS (CRÍTICO):
+IDENTIDAD Y TRANSPARENCIA:
+- Preséntate siempre: "Hola, soy Alma, asistente de NARA. Estoy para atenderte." (Solo en el primer mensaje de la charla).
+- Sé transparente: Eres un asistente virtual, pero siempre ofreces la opción de hablar con un humano.
+
+REGLAS DE ORO DE CONVERSACIÓN:
+1. RESPUESTA PUNTUAL: Si preguntan algo específico (niños, precios, ubicación), responde eso PRIMERO de forma amable y cálida.
+2. OPCIONES DE CIERRE: Al final de cada respuesta, ofrece SIEMPRE una de estas opciones según el flujo:
+   - "¿Te gustaría que revise qué días tenemos disponibles para reservar?"
+   - "¿Deseas más información sobre algún especialista?"
+   - "¿Prefieres ser atendido directamente por un psicólogo para resolver dudas técnicas?"
+3. PROTOCOLO DE ENLACE HUMANO: Si el usuario pide hablar con un psicólogo o humano, responde:
+   "Con gusto. Por favor dame oportunidad de enlazarte con Emmanuel, quien atenderá todas tus dudas personalmente. Dame un momento."
+
+TARIFAS:
 - Pareja: Emmanuel ($1,400), Especialistas ($1,200).
 - Individual: Emmanuel ($1,300), Especialistas ($1,000).
-- Niños/Adolescentes (Aracelly): $1,000 por sesión o Paquete de 5 por $3,600.
+- Niños/Adolescentes (Aracelly): $1,000 sesión o Paquete 5 por $3,600.
 
-PLAYBOOK:
-1. CALIFICA: Entiende el motivo de consulta (Pareja, Ansiedad, Depresión, etc.).
-2. OFRECE OPCIONES: Presenta a Emmanuel y a las Especialistas con sus precios.
-3. CIERRE: Si preguntan disponibilidad, di "Déjame revisar..." y ofrece dos horarios tentativos (ej: Lunes 10am o Martes 5pm).
-4. PAGO: Menciona que el espacio se reserva temporalmente por 2 horas tras enviar el link de pago.
-
-REGLA DE ORO: Si el usuario ya dio su nombre, úsalo. Si no, pregúntalo amablemente.
+MODO DE OPERACIÓN:
+- Sé empática, profesional y puntual.
+- Si el humano (Emmanuel) interviene y dice: "Un placer atenderte, te dejo con el asistente para reservar tu espacio", tú retomas la charla con naturalidad para cerrar la cita.
 `;
 
 // --- 2. AGENTE INTELIGENTE ---
@@ -95,57 +103,55 @@ let processedIds = new Set();
 
 async function runAgentLogic() {
   try {
-    // 1. Verificar Modo de Operación
     const { data: config } = await supabase.from('admin_config').select('operational_mode').single();
-    const operationalMode = config?.operational_mode || 'intelligent';
+    if (config?.operational_mode === 'emergency') return;
 
-    if (operationalMode === 'emergency') {
-      console.log('🛡️ MODO EMERGENCIA: Agente en silencio. Intervención humana requerida.');
-      return;
-    }
-
-    // 2. Buscar nuevos mensajes (Simplificado para evitar errores de relación)
+    // Obtener el último mensaje entrante GLOBAL para procesar de uno en uno
     const { data: messages, error } = await supabase
       .from('mensajes')
       .select('*')
       .eq('direccion', 'entrante')
       .order('created_at', { ascending: false })
-      .limit(5);
+      .limit(1);
 
-    if (error) throw error;
+    if (error || !messages || messages.length === 0) return;
 
-    for (const msg of messages) {
-      if (processedIds.has(msg.id)) continue;
-      processedIds.add(msg.id);
+    const msg = messages[0];
+    if (processedIds.has(msg.id)) return;
+    processedIds.add(msg.id);
 
-      // 3. Obtener Historial de la Conversación para darle MEMORIA
-      const { data: history } = await supabase
-        .from('mensajes')
-        .select('direccion, contenido')
-        .eq('conversacion_id', msg.conversacion_id)
-        .order('created_at', { ascending: false })
-        .limit(10);
+    // Verificar si ya respondimos a este mensaje específico (para evitar doble respuesta al reiniciar)
+    const { data: alreadyReplied } = await supabase
+      .from('mensajes')
+      .select('id')
+      .eq('conversacion_id', msg.conversacion_id)
+      .eq('direccion', 'saliente')
+      .gt('created_at', msg.created_at);
 
-      const formattedHistory = history?.reverse().map(m => `${m.direccion === 'entrante' ? 'Usuario' : 'NARA'}: ${m.contenido}`).join('\n');
+    if (alreadyReplied && alreadyReplied.length > 0) return;
 
-      const { data: contact } = await supabase.from('contactos').select('*').eq('id', msg.contacto_id).single();
-      
-      console.log(`🧠 Pensando respuesta con memoria para ${contact?.nombre || contact?.telefono}...`);
+    // Obtener Historial
+    const { data: history } = await supabase
+      .from('mensajes')
+      .select('direccion, contenido')
+      .eq('conversacion_id', msg.conversacion_id)
+      .order('created_at', { ascending: false })
+      .limit(6);
 
-      // 4. Generar respuesta con Gemini usando el HISTORIAL
-      const result = await model.generateContent([
-        { text: NARA_PROMPT },
-        { text: `Información del Contacto: ${JSON.stringify(contact || {})}` },
-        { text: `Historial reciente de la charla:\n${formattedHistory}` },
-        { text: `Último mensaje recibido (RESPONDE A ESTE): ${msg.contenido}` }
-      ]);
-      
-      const responseText = result.response.text();
+    const formattedHistory = history?.reverse().map(m => `${m.direccion === 'entrante' ? 'Usuario' : 'NARA'}: ${m.contenido}`).join('\n');
+    const { data: contact } = await supabase.from('contactos').select('*').eq('id', msg.contacto_id).single();
 
-      // 5. Enviar a WhatsApp
-      await sendWhatsAppMessage(contact.telefono, responseText, msg.conversacion_id, contact.id);
-      console.log(`✅ Respuesta con memoria enviada.`);
-    }
+    console.log(`🧠 Respondiendo a: ${contact?.nombre || contact?.telefono}`);
+
+    const result = await model.generateContent([
+      { text: ALMA_PROMPT },
+      { text: `Historial:\n${formattedHistory}` },
+      { text: `Pregunta actual: ${msg.contenido}` }
+    ]);
+    
+    const responseText = result.response.text();
+    await sendWhatsAppMessage(contact.telefono, responseText, msg.conversacion_id, contact.id);
+    console.log(`✅ Respuesta con memoria enviada.`);
     
   } catch (e) { 
     console.error('❌ Error Agente:', e.message); 
