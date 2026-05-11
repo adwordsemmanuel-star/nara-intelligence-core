@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NARA Intelligence OS — Inbox v3</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --primary: #ff8fb1; /* NARA Pink */
+      --secondary: #8ec5fc; /* NARA Blue */
+      --accent: #6c63ff;
+      --bg: #f8fafc;
+      --glass: rgba(255, 255, 255, 0.7);
+      --glass-dark: rgba(255, 255, 255, 0.4);
+      --border: rgba(255, 255, 255, 0.5);
+      --text-main: #1e293b;
+      --text-muted: #64748b;
+      --shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+      --green: #10b981;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      font-family: 'Inter', sans-serif;
+      background: linear-gradient(135deg, #fdfcfb 0%, #e2d1c3 100%);
+      background-attachment: fixed;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      color: var(--text-main);
+    }
+
+    .blob {
+      position: absolute;
+      width: 500px; height: 500px;
+      border-radius: 50%;
+      filter: blur(80px);
+      z-index: -1;
+      opacity: 0.4;
+      animation: float 20s infinite alternate;
+    }
+    .blob-1 { background: var(--primary); top: -100px; left: -100px; }
+    .blob-2 { background: var(--secondary); bottom: -100px; right: -100px; animation-delay: -5s; }
+    @keyframes float { 0%{transform:translate(0,0)} 100%{transform:translate(50px,50px)} }
+
+    /* ROI BAR */
+    .roi-bar {
+      display: flex;
+      gap: 20px;
+      padding: 15px 32px;
+      background: var(--glass);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border);
+      justify-content: center;
+    }
+    .roi-stat {
+      background: white;
+      padding: 10px 20px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-width: 120px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.02);
+    }
+    .roi-stat .label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+    .roi-stat .value { font-size: 18px; font-weight: 700; color: var(--text-main); }
+    .roi-stat .value span { font-size: 12px; font-weight: 500; opacity: 0.6; }
+
+    .header {
+      backdrop-filter: blur(10px);
+      background: var(--glass);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      z-index: 100;
+    }
+    .logo-container { display: flex; align-items: center; gap: 12px; }
+    .logo-icon { 
+      width: 32px; height: 32px; 
+      background: linear-gradient(45deg, var(--primary), var(--secondary));
+      border-radius: 8px;
+    }
+    .logo-text { font-family: 'Outfit', sans-serif; font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
+    .logo-text span { color: var(--primary); }
+    
+    .app-container {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 320px 1fr 300px;
+      gap: 0;
+      overflow: hidden;
+      margin: 10px 20px 20px;
+      background: var(--glass);
+      backdrop-filter: blur(16px);
+      border-radius: 24px;
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+    }
+
+    .inbox-list { border-right: 1px solid var(--border); display: flex; flex-direction: column; background: rgba(255,255,255,0.3); }
+    .list-header { padding: 24px; display: flex; justify-content: space-between; align-items: center; }
+    .list-header h2 { font-family: 'Outfit', sans-serif; font-size: 18px; font-weight: 600; }
+    .refresh-btn { background: white; border: 1px solid var(--border); padding: 8px; border-radius: 10px; cursor: pointer; }
+    .search-box { padding: 0 24px 16px; }
+    .search-input { width: 100%; padding: 10px 16px; border-radius: 12px; border: 1px solid var(--border); background: rgba(255,255,255,0.5); font-size: 13px; }
+    .contacts-scroll { flex: 1; overflow-y: auto; }
+    .contact-card { padding: 16px 24px; display: flex; gap: 14px; cursor: pointer; border-bottom: 1px solid rgba(0,0,0,0.03); transition: all 0.2s; }
+    .contact-card.active { background: white; border-left: 4px solid var(--primary); }
+    
+    .chat-view { display: flex; flex-direction: column; background: white; }
+    .messages-container { flex: 1; overflow-y: auto; padding: 32px; display: flex; flex-direction: column; gap: 16px; background: #fafbfc; }
+    .msg { max-width: 70%; padding: 12px 18px; border-radius: 20px; font-size: 14px; }
+    .msg.sent { align-self: flex-end; background: var(--primary); color: white; }
+    .msg.received { align-self: flex-start; background: white; border: 1px solid #eee; }
+
+    .input-area { padding: 24px 32px; border-top: 1px solid var(--border); }
+    .input-wrapper { display: flex; gap: 12px; background: var(--bg); padding: 8px; border-radius: 16px; border: 1px solid var(--border); }
+    .input-wrapper textarea { flex: 1; border: none; background: transparent; padding: 10px; font-size: 14px; resize: none; }
+    .send-trigger { background: var(--primary); color: white; border: none; width: 44px; height: 44px; border-radius: 12px; cursor: pointer; }
+
+    .details-panel { background: rgba(255,255,255,0.3); padding: 32px 24px; display: flex; flex-direction: column; gap: 24px; }
+    .template-list { display: grid; gap: 8px; }
+    .template-item { padding: 10px; border-radius: 10px; background: white; border: 1px solid var(--border); font-size: 12px; cursor: pointer; text-align: left; }
+    .template-item:hover { border-color: var(--primary); color: var(--primary); }
+    
+    /* SWITCH COMPONENT */
+    .switch { position: relative; display: inline-block; width: 50px; height: 28px; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 34px; }
+    .slider:before { position: absolute; content: ""; height: 20px; width: 20px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
+    input:checked + .slider { background-color: var(--primary); }
+    input:checked + .slider:before { transform: translateX(22px); }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo-container">
+    <div class="logo-icon"></div>
+    <div class="logo-text">NARA <span>Intelligence</span></div>
+  </div>
+  <div class="mode-switch-container" style="display:flex; align-items:center; gap:12px;">
+    <span id="modeLabel" style="font-size:14px; font-weight:600; color:var(--text-muted);">Cargando modo...</span>
+    <label class="switch">
+      <input type="checkbox" id="masterSwitch" disabled>
+      <span class="slider round"></span>
+    </label>
+  </div>
+</div>
+
+<div class="roi-bar">
+  <div class="roi-stat">
+    <span class="label">Total Leads</span>
+    <span class="value" id="stat-total">0</span>
+  </div>
+  <div class="roi-stat">
+    <span class="label">Google Ads</span>
+    <span class="value" id="stat-google">0</span>
+  </div>
+  <div class="roi-stat">
+    <span class="label">Meta Ads</span>
+    <span class="value" id="stat-meta">0</span>
+  </div>
+  <div class="roi-stat">
+    <span class="label">WhatsApp Direct</span>
+    <span class="value" id="stat-whatsapp">0</span>
+  </div>
+</div>
+
+<div class="app-container">
+  <aside class="inbox-list">
+    <div class="list-header">
+      <h2>Mensajes</h2>
+      <button class="refresh-btn" onclick="fetchData()">🔄</button>
+    </div>
+    <div class="search-box">
+      <input type="text" class="search-input" placeholder="Buscar contacto...">
+    </div>
+    <div class="contacts-scroll" id="contactList"></div>
+  </aside>
+
+  <main class="chat-view" id="chatView">
+    <div style="flex:1; display:flex; align-items:center; justify-content:center; color:#94a3b8">
+      Selecciona una conversación para comenzar
+    </div>
+  </main>
+
+  <aside class="details-panel">
+    <div id="patientSummary">
+      <h3 id="patientName" style="margin-bottom:5px">--</h3>
+      <p id="patientPhone" style="font-size:12px; color:#64748b; margin-bottom:15px">--</p>
+      <div id="patientSummaryText" style="font-size:13px; background:white; padding:10px; border-radius:10px; border:1px solid #eee">
+        Sin resumen ejecutivo disponible.
+      </div>
+    </div>
+    
+    <div class="detail-section" style="margin-top:20px">
+      <h4 style="font-size:12px; text-transform:uppercase; margin-bottom:10px">📅 Agenda Hoy</h4>
+      <div id="mini-agenda" style="display: grid; gap: 8px;">
+        <!-- Slots dynamically rendered -->
+        <div style="text-align:center; color:#94a3b8; font-size:12px; padding:20px;">Cargando agenda...</div>
+      </div>
+    </div>
+  <script>
+    const API_URL = 'https://lnjedahsquawinemhmfi.supabase.co/rest/v1';
+    const SUPA_URL = 'https://lnjedahsquawinemhmfi.supabase.co';
+    const KEY = 'sb_publishable_vI0L7JI3ZTJbArACHyp6qQ_hLJ3EIVC';
+    
+    const { createClient } = supabase;
+    const db = createClient(SUPA_URL, KEY);
+    
+    let contacts = [];
+    let selectedContactId = null;
+    let currentMode = 'manual';
+
+    async function initControl() {
+      const { data, error } = await db.from('admin_config').select('value').eq('key', 'operational_mode').single();
+      const switchEl = document.getElementById('masterSwitch');
+      const labelEl = document.getElementById('modeLabel');
+      
+      if(data) {
+        currentMode = data.value;
+        switchEl.checked = (currentMode === 'intelligent');
+        labelEl.textContent = currentMode === 'intelligent' ? '🧠 Modo ALMA (Automático)' : '👩‍⚕️ Modo Humano (Manual)';
+        switchEl.disabled = false;
+      }
+
+      switchEl.addEventListener('change', async (e) => {
+        const newMode = e.target.checked ? 'intelligent' : 'manual';
+        labelEl.textContent = 'Actualizando...';
+        switchEl.disabled = true;
+        
+        await db.from('admin_config').update({ value: newMode }).eq('key', 'operational_mode');
+        
+        currentMode = newMode;
+        labelEl.textContent = currentMode === 'intelligent' ? '🧠 Modo ALMA (Automático)' : '👩‍⚕️ Modo Humano (Manual)';
+        switchEl.disabled = false;
+      });
+    }
+
+    async function fetchAgenda() {
+      try {
+        const res = await fetch(`${API_URL}/agenda?select=*,psicologos(nombre)&order=fecha_inicio.asc`, {
+          headers: { apikey: KEY, Authorization: `Bearer ${KEY}` }
+        });
+        const slots = await res.json();
+        renderAgenda(slots);
+      } catch (e) { console.error('Error agenda:', e); }
+    }
+
+    function renderAgenda(slots) {
+      const container = document.getElementById('mini-agenda');
+      if (!slots || !slots.length) {
+        container.innerHTML = '<div style="font-size:11px; color:#64748b; text-align:center; padding:10px;">No hay citas hoy.</div>';
+        return;
+      }
+
+      container.innerHTML = slots.map(s => {
+        let color = '#94a3b8'; // Gris (Apartado/Disponible)
+        if (s.estado_reserva === 'confirmada') color = 'var(--green)';
+        if (s.estado_reserva === 'cancelada') color = '#ef4444';
+        
+        const hora = new Date(s.fecha_inicio).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false });
+        
+        return `
+          <div style="background:white; padding:10px; border-radius:10px; border-left:4px solid ${color}; font-size:12px; display:flex; justify-content:space-between; align-items:center; box-shadow:0 2px 4px rgba(0,0,0,0.02); margin-bottom:8px;">
+            <div>
+              <div style="font-weight:700">${hora}</div>
+              <div style="font-size:10px; opacity:0.7">${s.psicologos?.nombre || 'Especialista'}</div>
+            </div>
+            <div style="text-transform:uppercase; font-size:9px; font-weight:800; color:${color}">${s.estado_reserva}</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function fetchData() {
+      try {
+        const res = await fetch(`${API_URL}/contactos?select=*&order=created_at.desc`, {
+          headers: { apikey: KEY, Authorization: `Bearer ${KEY}` }
+        });
+        contacts = await res.json();
+        updateROI();
+        renderContacts();
+        fetchAgenda();
+      } catch (e) { console.error(e); }
+    }
+
+    function updateROI() {
+      document.getElementById('stat-total').textContent = contacts.length;
+      document.getElementById('stat-google').textContent = contacts.filter(c => c.fuente === 'google_ads').length;
+      document.getElementById('stat-meta').textContent = contacts.filter(c => c.fuente === 'meta_ads').length;
+      document.getElementById('stat-whatsapp').textContent = contacts.filter(c => c.fuente === 'whatsapp').length;
+    }
+
+    function renderContacts() {
+      const list = document.getElementById('contactList');
+      list.innerHTML = contacts.map(c => `
+        <div class="contact-card ${selectedContactId === c.id ? 'active' : ''}" onclick="selectContact('${c.id}')">
+          <div>
+            <div style="font-weight:600; font-size:14px">${c.nombre || c.telefono}</div>
+            <div style="font-size:12px; color:#64748b">${c.fuente}</div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    let currentConversationId = null;
+
+    async function selectContact(id) {
+      selectedContactId = id;
+      const contact = contacts.find(c => c.id === id);
+      document.getElementById('patientName').textContent = contact.nombre || 'Lead Nuevo';
+      document.getElementById('patientPhone').textContent = contact.telefono;
+      document.getElementById('patientSummaryText').textContent = contact.notas_admin || 'Sin resumen ejecutivo.';
+      renderContacts();
+
+      // Render Chat UI
+      const chatView = document.getElementById('chatView');
+      chatView.innerHTML = `
+        <div class="messages-container" id="messagesContainer">
+          <div style="text-align:center; color:#94a3b8; margin-top:20px;">Cargando mensajes...</div>
+        </div>
+        <div class="input-area" id="inputArea">
+          <div class="input-wrapper">
+            <button class="send-trigger" style="background:#8ec5fc; width:auto; padding:0 12px; font-size:16px;" onclick="suggestReply()" title="Sugerir con IA">✨</button>
+            <textarea id="chatInput" placeholder="Escribe un mensaje manual..." rows="1" onkeypress="handleEnter(event)"></textarea>
+            <button class="send-trigger" onclick="sendManualMessage()">🚀</button>
+          </div>
+        </div>
+      `;
+
+      // Fetch conversation ID safely
+      const { data: convs, error } = await db.from('conversaciones')
+        .select('id')
+        .eq('contacto_id', id)
+        .order('created_at', { ascending: false })
+        .limit(1);
+        
+      if (convs && convs.length > 0) {
+        currentConversationId = convs[0].id;
+        await loadMessages(currentConversationId);
+      } else {
+        currentConversationId = null;
+        document.getElementById('messagesContainer').innerHTML = '<div style="text-align:center; color:#94a3b8; margin-top:20px;">Sin historial de mensajes.</div>';
+      }
+    }
+
+    async function loadMessages(convId) {
+      const { data: msgs, error } = await db.from('mensajes').select('*').eq('conversacion_id', convId).order('fecha_recibido', { ascending: true });
+      if (error) console.error(error);
+      renderMessages(msgs);
+    }
+
+    function renderMessages(msgs) {
+      const container = document.getElementById('messagesContainer');
+      if(!container) return;
+      if(!msgs || msgs.length === 0) {
+        container.innerHTML = '<div style="text-align:center; color:#94a3b8; margin-top:20px;">No hay mensajes todavía.</div>';
+        return;
+      }
+      container.innerHTML = msgs.map(m => {
+        const type = m.direccion === 'entrante' ? 'received' : 'sent';
+        const time = new Date(m.fecha_recibido).toLocaleTimeString('es-MX', {hour:'2-digit', minute:'2-digit'});
+        return `
+          <div class="msg ${type}">
+            <div style="margin-bottom:4px; white-space:pre-wrap;">${m.contenido}</div>
+            <div style="font-size:10px; opacity:0.6; text-align:right;">${time}</div>
+          </div>
+        `;
+      }).join('');
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function handleEnter(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendManualMessage();
+      }
+    }
+
+    async function sendManualMessage() {
+      const input = document.getElementById('chatInput');
+      const text = input.value.trim();
+      if(!text || !currentConversationId || !selectedContactId) return;
+
+      const contact = contacts.find(c => c.id === selectedContactId);
+      if(!contact || !contact.telefono) return;
+
+      input.value = '';
+      
+      const container = document.getElementById('messagesContainer');
+      container.innerHTML += `
+          <div class="msg sent" style="opacity:0.7">
+            <div style="margin-bottom:4px;">${text}</div>
+            <div style="font-size:10px; text-align:right;">Enviando...</div>
+          </div>
+        `;
+      container.scrollTop = container.scrollHeight;
+
+      try {
+        // Enviar al backend (cambiar URL si está en producción)
+        const BACKEND_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+          ? 'http://localhost:8080' 
+          : 'https://nara-intelligence-core-production.up.railway.app'; // Asumiendo url de railway
+
+        const res = await fetch(`${BACKEND_URL}/send-message`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            telefono: contact.telefono,
+            mensaje: text,
+            conversacion_id: currentConversationId,
+            contacto_id: selectedContactId
+          })
+        });
+        
+        if(res.ok) {
+          await loadMessages(currentConversationId); 
+        } else {
+          alert('Error al enviar. Revisa la consola.');
+        }
+      } catch (e) {
+        console.error('Error enviando mensaje', e);
+        alert('Error de conexión con el backend.');
+      }
+    }
+
+    async function suggestReply() {
+      if(!currentConversationId) return;
+      
+      const btn = document.querySelector('.send-trigger[title="Sugerir con IA"]');
+      const input = document.getElementById('chatInput');
+      
+      const originalText = btn.textContent;
+      btn.textContent = '⏳';
+      btn.disabled = true;
+
+      try {
+        const BACKEND_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+          ? 'http://localhost:8080' 
+          : 'https://nara-intelligence-core-production.up.railway.app';
+
+        const res = await fetch(`${BACKEND_URL}/suggest-reply`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ conversacion_id: currentConversationId })
+        });
+        
+        const data = await res.json();
+        if(data.suggestion) {
+          input.value = data.suggestion;
+        } else {
+          alert('Error: ' + data.error);
+        }
+      } catch(e) {
+        alert('Error conectando con Copiloto.');
+      }
+
+      btn.textContent = originalText;
+      btn.disabled = false;
+    }
+
+    // Realtime Subscription para nuevos mensajes
+    db.channel('mensajes_channel')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mensajes' }, payload => {
+        if (payload.new && payload.new.conversacion_id === currentConversationId) {
+          loadMessages(currentConversationId);
+        }
+      })
+      .subscribe();
+
+    initControl();
+    fetchData();
+    setInterval(fetchData, 10000);
+  </script>
+
+</body>
+</html>

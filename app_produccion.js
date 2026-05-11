@@ -1,10 +1,16 @@
 require('dotenv').config();
 const express = require('express');
+const cors = require('cors');
 const { createClient } = require('@supabase/supabase-js');
 const axios = require('axios');
 
 const app = express();
+app.use(cors());
 app.use(express.json());
+
+// Servir el panel de control estático en la ruta /panel
+const path = require('path');
+app.use('/panel', express.static(path.join(__dirname, 'public')));
 
 // --- CONFIGURACIÓN ---
 const port = process.env.PORT || 3000;
@@ -215,6 +221,45 @@ app.post('/send-message', async (req, res) => {
 
     res.json({ success: true });
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// --- 4. COPILOTO IA (Sugerencias para el dashboard) ---
+app.post('/suggest-reply', async (req, res) => {
+  const { conversacion_id } = req.body;
+  try {
+    // Obtener Historial
+    const { data: history } = await supabase
+      .from('mensajes')
+      .select('direccion, contenido')
+      .eq('conversacion_id', conversacion_id)
+      .order('fecha_recibido', { ascending: false })
+      .limit(8);
+
+    const formattedHistory = history?.reverse().map(m => `${m.direccion === 'entrante' ? 'Usuario' : 'ALMA/Especialista'}: ${m.contenido}`).join('\n');
+
+    const prompt = `
+Eres el Copiloto de NARA Psychology. Tu tarea es ayudar al equipo humano a responder rápido.
+Basado en este historial de chat reciente, redacta una respuesta profesional, cálida y concisa que el equipo pueda enviarle al usuario.
+Solo devuelve el texto de la respuesta, sin explicaciones ni comillas.
+
+HISTORIAL:
+${formattedHistory}
+
+Respuesta sugerida:`;
+
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`;
+    
+    const response = await axios.post(geminiUrl, {
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.7, maxOutputTokens: 200 }
+    });
+
+    const suggestion = response.data.candidates[0].content.parts[0].text.trim();
+    res.json({ suggestion });
+  } catch (e) {
+    console.error('Error Copiloto:', e.message);
+    res.status(500).json({ error: 'No se pudo generar la sugerencia.' });
+  }
 });
 
 // Iniciar servidor

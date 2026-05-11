@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NARA 360 | Agenda Clínica</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+:root {
+  --bg:#0a0e1a; --surface:#111827; --surface2:#1a2235;
+  --border:rgba(255,255,255,0.07); --accent:#7c5cfc; --accent2:#ec4899;
+  --green:#10b981; --yellow:#f59e0b; --red:#ef4444; --blue:#3b82f6;
+  --text:#f1f5f9; --muted:#64748b;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+
+/* HEADER */
+header{
+  background:linear-gradient(135deg,#0f172a 0%,#1e1b4b 100%);
+  border-bottom:1px solid var(--border);
+  padding:0 28px; height:60px;
+  display:flex; align-items:center; justify-content:space-between;
+  position:sticky; top:0; z-index:200;
+}
+.logo{display:flex;align-items:center;gap:10px;}
+.logo-icon{width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;}
+.logo-text{font-size:17px;font-weight:700;}
+.logo-text span{color:var(--accent);}
+.nav-tabs{display:flex;gap:4px;}
+.nav-tab{padding:6px 16px;border-radius:8px;font-size:13px;font-weight:500;color:var(--muted);cursor:pointer;text-decoration:none;transition:all .2s;}
+.nav-tab:hover,.nav-tab.active{background:rgba(124,92,252,.15);color:var(--accent);}
+.live-badge{display:flex;align-items:center;gap:6px;background:rgba(16,185,129,.15);border:1px solid rgba(16,185,129,.3);padding:4px 12px;border-radius:20px;font-size:12px;color:var(--green);}
+.live-dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* LAYOUT */
+.layout{display:grid;grid-template-columns:260px 1fr;gap:0;height:calc(100vh - 60px);}
+
+/* SIDEBAR */
+.sidebar{background:var(--surface);border-right:1px solid var(--border);padding:20px 16px;overflow-y:auto;display:flex;flex-direction:column;gap:20px;}
+.sidebar-section{}
+.sidebar-label{font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;}
+
+/* Mini KPIs */
+.mini-kpi{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;gap:12px;}
+.mini-kpi-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;}
+.mini-kpi-icon.green{background:rgba(16,185,129,.15);}
+.mini-kpi-icon.yellow{background:rgba(245,158,11,.15);}
+.mini-kpi-icon.red{background:rgba(239,68,68,.15);}
+.mini-kpi-icon.purple{background:rgba(124,92,252,.15);}
+.mini-kpi-val{font-size:20px;font-weight:800;line-height:1;}
+.mini-kpi-lbl{font-size:11px;color:var(--muted);margin-top:1px;}
+
+/* Ocupacion bar */
+.ocu-wrap{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px;}
+.ocu-title{font-size:12px;font-weight:600;margin-bottom:12px;}
+.ocu-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+.ocu-name{font-size:11px;color:var(--muted);width:70px;flex-shrink:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ocu-bar-bg{flex:1;height:6px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden;}
+.ocu-bar-fill{height:100%;border-radius:3px;transition:width .6s ease;}
+.ocu-pct{font-size:11px;color:var(--text);width:32px;text-align:right;flex-shrink:0;}
+
+/* Legend */
+.psi-legend{display:flex;flex-direction:column;gap:7px;}
+.psi-item{display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;padding:4px 6px;border-radius:6px;transition:background .2s;}
+.psi-item:hover{background:rgba(255,255,255,.05);}
+.psi-dot{width:10px;height:10px;border-radius:3px;flex-shrink:0;}
+
+/* Tipo tags */
+.tipo-legend{display:flex;flex-wrap:wrap;gap:6px;}
+.tipo-tag{padding:3px 10px;border-radius:6px;font-size:11px;font-weight:500;}
+
+/* CALENDAR */
+.cal-wrap{padding:20px 24px;overflow-y:auto;background:var(--bg);}
+.fc{--fc-bg-event-opacity:.85;--fc-border-color:rgba(255,255,255,.07);--fc-today-bg-color:rgba(124,92,252,.08);--fc-event-border-color:transparent;--fc-page-bg-color:transparent;--fc-neutral-bg-color:var(--surface2);--fc-list-event-hover-bg-color:rgba(124,92,252,.1);}
+.fc .fc-toolbar{margin-bottom:16px;}
+.fc .fc-toolbar-title{font-size:18px;font-weight:700;color:var(--text);}
+.fc .fc-button{background:var(--surface2)!important;border:1px solid var(--border)!important;color:var(--text)!important;font-family:'Inter',sans-serif!important;font-size:12px!important;font-weight:500!important;border-radius:8px!important;padding:6px 14px!important;transition:all .2s!important;}
+.fc .fc-button:hover{border-color:var(--accent)!important;color:var(--accent)!important;}
+.fc .fc-button-active,.fc .fc-button-primary:not(:disabled).fc-button-active{background:var(--accent)!important;border-color:var(--accent)!important;color:#fff!important;}
+.fc .fc-col-header-cell{background:var(--surface);border-color:var(--border)!important;}
+.fc .fc-col-header-cell-cushion{color:var(--muted);font-size:12px;font-weight:600;text-transform:uppercase;padding:8px 4px;}
+.fc .fc-daygrid-day-number{color:var(--muted);font-size:12px;padding:6px;}
+.fc .fc-daygrid-day.fc-day-today .fc-daygrid-day-number{color:var(--accent);font-weight:700;}
+.fc td,.fc th{border-color:var(--border)!important;}
+.fc .fc-timegrid-slot-label{color:var(--muted);font-size:11px;}
+.fc .fc-event{border-radius:6px!important;border:none!important;font-size:11px!important;font-weight:600!important;cursor:pointer;}
+.fc .fc-event:hover{filter:brightness(1.15)!important;}
+.fc .fc-daygrid-event{padding:2px 6px!important;}
+.fc .fc-list-event td{border-color:var(--border)!important;}
+.fc .fc-list-day-cushion{background:var(--surface2)!important;color:var(--text)!important;font-size:12px!important;}
+.fc .fc-list-event:hover td{background:rgba(124,92,252,.08)!important;}
+
+/* Tooltip */
+.cal-tooltip{
+  position:fixed;z-index:9999;
+  background:#1e293b;border:1px solid rgba(124,92,252,.4);
+  border-radius:12px;padding:14px 16px;min-width:220px;
+  box-shadow:0 8px 32px rgba(0,0,0,.5);
+  pointer-events:none;display:none;
+}
+.tt-name{font-size:14px;font-weight:700;margin-bottom:6px;}
+.tt-row{font-size:12px;color:var(--muted);margin-bottom:3px;display:flex;gap:6px;}
+.tt-row span{color:var(--text);}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">N</div>
+    <div class="logo-text">NARA <span>360</span></div>
+  </div>
+  <div class="nav-tabs">
+    <a class="nav-tab" href="index.html">📊 Dashboard</a>
+    <a class="nav-tab active" href="calendario.html">📅 Agenda</a>
+  </div>
+  <div class="live-badge"><div class="live-dot"></div> Demo · Mayo 2026</div>
+</header>
+
+<div class="layout">
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Esta Semana</div>
+      <div class="mini-kpi">
+        <div class="mini-kpi-icon green">📋</div>
+        <div><div class="mini-kpi-val" style="color:var(--green)">42</div><div class="mini-kpi-lbl">Citas agendadas</div></div>
+      </div>
+      <div class="mini-kpi">
+        <div class="mini-kpi-icon yellow">⚠️</div>
+        <div><div class="mini-kpi-val" style="color:var(--yellow)">6</div><div class="mini-kpi-lbl">Cancelaciones</div></div>
+      </div>
+      <div class="mini-kpi">
+        <div class="mini-kpi-icon red">✗</div>
+        <div><div class="mini-kpi-val" style="color:var(--red)">3</div><div class="mini-kpi-lbl">No-shows</div></div>
+      </div>
+      <div class="mini-kpi">
+        <div class="mini-kpi-icon purple">💰</div>
+        <div><div class="mini-kpi-val" style="color:var(--accent)">$33K</div><div class="mini-kpi-lbl">Ingreso estimado</div></div>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Ocupación por Psicóloga</div>
+      <div class="ocu-wrap">
+        <div id="ocuBars"></div>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Psicólogas</div>
+      <div class="psi-legend" id="psiLegend"></div>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-label">Tipo de Servicio</div>
+      <div class="tipo-legend">
+        <span class="tipo-tag" style="background:rgba(16,185,129,.15);color:#10b981;">Individual</span>
+        <span class="tipo-tag" style="background:rgba(236,72,153,.15);color:#ec4899;">Pareja</span>
+        <span class="tipo-tag" style="background:rgba(245,158,11,.15);color:#f59e0b;">Niños</span>
+        <span class="tipo-tag" style="background:rgba(59,130,246,.15);color:#60a5fa;">Adolescentes</span>
+        <span class="tipo-tag" style="background:rgba(168,85,247,.15);color:#c084fc;">Familiar</span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- CALENDAR -->
+  <div class="cal-wrap">
+    <div id="calendar"></div>
+  </div>
+</div>
+
+<div class="cal-tooltip" id="tooltip">
+  <div class="tt-name" id="tt-name"></div>
+  <div class="tt-row">🗓 <span id="tt-fecha"></span></div>
+  <div class="tt-row">⏰ <span id="tt-hora"></span></div>
+  <div class="tt-row">👩‍⚕️ <span id="tt-psi"></span></div>
+  <div class="tt-row">📋 <span id="tt-tipo"></span></div>
+  <div class="tt-row">🔵 <span id="tt-estatus"></span></div>
+</div>
+
+<script>
+// PSICÓLOGAS CONFIG
+const PSICOLOGAS = [
+  { nombre:'Angelica',  color:'#7c5cfc' },
+  { nombre:'Aracelly',  color:'#10b981' },
+  { nombre:'Adriana',   color:'#ec4899' },
+  { nombre:'Emmanuel',  color:'#3b82f6' },
+  { nombre:'Laura',     color:'#f59e0b' },
+  { nombre:'Gina',      color:'#06b6d4' },
+];
+
+const OCUPACION = [
+  { nombre:'Angelica',  pct:87 },
+  { nombre:'Aracelly',  pct:72 },
+  { nombre:'Adriana',   pct:91 },
+  { nombre:'Emmanuel',  pct:60 },
+  { nombre:'Laura',     pct:45 },
+  { nombre:'Gina',      pct:38 },
+];
+
+const TIPOS = ['Individual','Pareja','Niños','Adolescentes','Familiar'];
+const PACIENTES = [
+  'Vanessa R.','Julián J.','Paola Z.','Leslie P.','Isidoro C.',
+  'Sara B.','Camila T.','Jeshua C.','Patricio J.','Angel R.',
+  'Ernesto H.','Jazmin C.','Renata R.','Yareni G.','Carolina M.',
+  'Edwin B.','Manuel P.','Audrey A.','Karen J.','Edson C.',
+  'Yareli G.','Abdiel G.','Benjamin R.','Maria J.','Jessica C.',
+];
+const ESTATUSES = ['Confirmada','Confirmada','Confirmada','Cancelada','No-show'];
+
+// Build legend
+const legend = document.getElementById('psiLegend');
+PSICOLOGAS.forEach(p => {
+  legend.innerHTML += `<div class="psi-item"><div class="psi-dot" style="background:${p.color}"></div>${p.nombre}</div>`;
+});
+
+// Build ocupación bars
+const ocuBars = document.getElementById('ocuBars');
+OCUPACION.forEach(o => {
+  const psi = PSICOLOGAS.find(p => p.nombre === o.nombre);
+  ocuBars.innerHTML += `
+    <div class="ocu-row">
+      <div class="ocu-name">${o.nombre}</div>
+      <div class="ocu-bar-bg"><div class="ocu-bar-fill" style="width:${o.pct}%;background:${psi.color}"></div></div>
+      <div class="ocu-pct">${o.pct}%</div>
+    </div>`;
+});
+
+// Generate realistic mock events around today
+function generateEvents() {
+  const events = [];
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = today.getMonth();
+
+  // Hours: 9am-7pm, Mon-Sat
+  const slots = [9,10,11,12,13,14,15,16,17,18];
+
+  for (let d = 1; d <= 31; d++) {
+    const date = new Date(year, month, d);
+    if (date.getMonth() !== month) break;
+    const dow = date.getDay(); // 0=Sun
+    if (dow === 0) continue; // No Sundays
+
+    const numCitas = 5 + Math.floor(Math.random() * 5);
+    const shuffledSlots = [...slots].sort(() => Math.random() - 0.5).slice(0, numCitas);
+
+    shuffledSlots.forEach(hour => {
+      const psi = PSICOLOGAS[Math.floor(Math.random() * PSICOLOGAS.length)];
+      const tipo = TIPOS[Math.floor(Math.random() * TIPOS.length)];
+      const paciente = PACIENTES[Math.floor(Math.random() * PACIENTES.length)];
+      const estatus = ESTATUSES[Math.floor(Math.random() * ESTATUSES.length)];
+
+      const start = new Date(year, month, d, hour, Math.random() > 0.5 ? 0 : 30);
+      const end = new Date(start.getTime() + 60 * 60000);
+
+      let opacity = 'ff';
+      if (estatus === 'Cancelada') opacity = '66';
+      if (estatus === 'No-show') opacity = '44';
+
+      events.push({
+        title: `${paciente}`,
+        start, end,
+        backgroundColor: psi.color + opacity,
+        borderColor: 'transparent',
+        extendedProps: { psi: psi.nombre, tipo, paciente, estatus, hora: `${start.toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})} – ${end.toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})}` }
+      });
+    });
+  }
+  return events;
+}
+
+// Tooltip logic
+const tooltip = document.getElementById('tooltip');
+function showTooltip(info, e) {
+  const p = info.event.extendedProps;
+  document.getElementById('tt-name').textContent = p.paciente;
+  document.getElementById('tt-fecha').textContent = info.event.start.toLocaleDateString('es-MX',{weekday:'long',day:'numeric',month:'long'});
+  document.getElementById('tt-hora').textContent = p.hora;
+  document.getElementById('tt-psi').textContent = p.psi;
+  document.getElementById('tt-tipo').textContent = p.tipo;
+  document.getElementById('tt-estatus').textContent = p.estatus;
+  tooltip.style.display = 'block';
+  moveTooltip(e);
+}
+function moveTooltip(e) {
+  let x = e.pageX + 16, y = e.pageY + 16;
+  if (x + 240 > window.innerWidth) x = e.pageX - 250;
+  if (y + 160 > window.innerHeight) y = e.pageY - 170;
+  tooltip.style.left = x + 'px';
+  tooltip.style.top = y + 'px';
+}
+document.addEventListener('mousemove', e => { if (tooltip.style.display === 'block') moveTooltip(e); });
+
+// Init FullCalendar
+document.addEventListener('DOMContentLoaded', () => {
+  const cal = new FullCalendar.Calendar(document.getElementById('calendar'), {
+    initialView: 'timeGridWeek',
+    locale: 'es',
+    height: 'auto',
+    slotMinTime: '09:00:00',
+    slotMaxTime: '20:00:00',
+    allDaySlot: false,
+    slotDuration: '00:30:00',
+    headerToolbar: {
+      left: 'prev,next today',
+      center: 'title',
+      right: 'dayGridMonth,timeGridWeek,timeGridDay,listWeek'
+    },
+    buttonText: { today:'Hoy', month:'Mes', week:'Semana', day:'Día', list:'Lista' },
+    events: generateEvents(),
+    eventMouseEnter: (info) => {
+      document.addEventListener('mousemove', handler);
+      showTooltip(info, window._lastMouseEvent || {pageX:0, pageY:0});
+    },
+    eventMouseLeave: () => {
+      tooltip.style.display = 'none';
+    },
+    eventClick: (info) => {
+      const p = info.event.extendedProps;
+      alert(`📋 ${p.paciente}\n👩‍⚕️ ${p.psi}\n📅 ${p.hora}\n🏷 ${p.tipo}\n🔵 ${p.estatus}`);
+    }
+  });
+  cal.render();
+});
+window.addEventListener('mousemove', e => { window._lastMouseEvent = e; });
+</script>
+</body>
+</html>

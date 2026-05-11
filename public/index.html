@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NARA 360 | Dashboard Clínico</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0e1a;
+    --surface: #111827;
+    --surface2: #1a2235;
+    --border: rgba(255,255,255,0.07);
+    --accent: #7c5cfc;
+    --accent2: #ec4899;
+    --green: #10b981;
+    --yellow: #f59e0b;
+    --red: #ef4444;
+    --blue: #3b82f6;
+    --text: #f1f5f9;
+    --muted: #64748b;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+
+  /* HEADER */
+  header {
+    background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 0 32px;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky; top: 0; z-index: 100;
+  }
+  .logo { display:flex; align-items:center; gap:12px; }
+  .logo-icon {
+    width:36px; height:36px; border-radius:10px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    display:flex; align-items:center; justify-content:center;
+    font-size:16px; font-weight:800; color:#fff;
+  }
+  .logo-text { font-size:18px; font-weight:700; }
+  .logo-text span { color:var(--accent); }
+  .header-right { display:flex; align-items:center; gap:16px; }
+  .nav-tabs { display:flex; gap:4px; }
+  .nav-tab { padding:6px 16px; border-radius:8px; font-size:13px; font-weight:500; color:var(--muted); cursor:pointer; text-decoration:none; transition:all .2s; }
+  .nav-tab:hover { background:rgba(124,92,252,.1); color:var(--accent); }
+  .nav-tab.active { background:rgba(124,92,252,.15); color:var(--accent); }
+  .live-badge {
+    display:flex; align-items:center; gap:6px;
+    background:rgba(16,185,129,0.15); border:1px solid rgba(16,185,129,0.3);
+    padding:4px 12px; border-radius:20px; font-size:12px; color:var(--green);
+  }
+  .live-dot { width:6px; height:6px; border-radius:50%; background:var(--green); animation:pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+  .last-updated { font-size:12px; color:var(--muted); }
+
+  /* LAYOUT */
+  main { padding:28px 32px; max-width:1400px; margin:0 auto; }
+
+  /* KPI CARDS */
+  .kpi-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:28px; }
+  .kpi-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius:16px; padding:20px;
+    position:relative; overflow:hidden;
+    transition: transform 0.2s, border-color 0.2s;
+    cursor: default;
+  }
+  .kpi-card:hover { transform:translateY(-2px); border-color:rgba(124,92,252,0.3); }
+  .kpi-card::before {
+    content:''; position:absolute; top:0; left:0; right:0; height:2px;
+  }
+  .kpi-card.purple::before { background:linear-gradient(90deg,var(--accent),var(--accent2)); }
+  .kpi-card.green::before { background:linear-gradient(90deg,#10b981,#34d399); }
+  .kpi-card.yellow::before { background:linear-gradient(90deg,#f59e0b,#fbbf24); }
+  .kpi-card.red::before { background:linear-gradient(90deg,#ef4444,#f87171); }
+  .kpi-label { font-size:12px; color:var(--muted); font-weight:500; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:8px; }
+  .kpi-value { font-size:32px; font-weight:800; line-height:1; margin-bottom:8px; }
+  .kpi-card.purple .kpi-value { color:var(--accent); }
+  .kpi-card.green .kpi-value { color:var(--green); }
+  .kpi-card.yellow .kpi-value { color:var(--yellow); }
+  .kpi-card.red .kpi-value { color:var(--red); }
+  .kpi-sub { font-size:12px; color:var(--muted); }
+  .kpi-sub b { color:var(--text); }
+
+  /* CHART SECTION */
+  .charts-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:28px; }
+  .chart-card {
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:16px; padding:20px;
+  }
+  .chart-title { font-size:14px; font-weight:600; margin-bottom:4px; }
+  .chart-sub { font-size:12px; color:var(--muted); margin-bottom:20px; }
+  .chart-wrap { position:relative; height:220px; }
+
+  /* TABLE SECTION */
+  .section-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+  .section-title { font-size:16px; font-weight:700; }
+  .controls { display:flex; gap:10px; }
+  input[type=text], select {
+    background:var(--surface2); border:1px solid var(--border);
+    color:var(--text); border-radius:8px; padding:8px 14px;
+    font-size:13px; font-family:'Inter',sans-serif; outline:none;
+  }
+  input[type=text]:focus, select:focus { border-color:var(--accent); }
+  input[type=text] { width:220px; }
+
+  .table-wrap { background:var(--surface); border:1px solid var(--border); border-radius:16px; overflow:hidden; }
+  table { width:100%; border-collapse:collapse; }
+  thead tr { background:var(--surface2); }
+  th { padding:12px 16px; text-align:left; font-size:11px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; }
+  td { padding:12px 16px; font-size:13px; border-bottom:1px solid var(--border); }
+  tr:last-child td { border-bottom:none; }
+  tbody tr:hover { background:rgba(124,92,252,0.04); }
+
+  .badge {
+    display:inline-flex; align-items:center; gap:5px;
+    padding:3px 10px; border-radius:20px; font-size:11px; font-weight:600; white-space:nowrap;
+  }
+  .badge-green { background:rgba(16,185,129,0.15); color:#10b981; }
+  .badge-yellow { background:rgba(245,158,11,0.15); color:#f59e0b; }
+  .badge-red { background:rgba(239,68,68,0.15); color:#ef4444; }
+  .badge-blue { background:rgba(59,130,246,0.15); color:#60a5fa; }
+  .badge-gray { background:rgba(100,116,139,0.15); color:#94a3b8; }
+  .badge-purple { background:rgba(124,92,252,0.15); color:#a78bfa; }
+
+  .psy-tag {
+    display:inline-block; padding:2px 8px; border-radius:6px;
+    font-size:11px; font-weight:600; background:rgba(124,92,252,0.12); color:#a78bfa;
+  }
+  .serv-tag { font-size:12px; color:var(--muted); }
+
+  /* PAGINATION */
+  .pagination { display:flex; align-items:center; justify-content:space-between; padding:14px 20px; border-top:1px solid var(--border); }
+  .page-info { font-size:13px; color:var(--muted); }
+  .page-btns { display:flex; gap:6px; }
+  .page-btn {
+    background:var(--surface2); border:1px solid var(--border);
+    color:var(--text); border-radius:6px; padding:6px 12px;
+    font-size:13px; cursor:pointer; transition:all 0.2s;
+  }
+  .page-btn:hover:not(:disabled) { border-color:var(--accent); color:var(--accent); }
+  .page-btn:disabled { opacity:0.3; cursor:default; }
+  .page-btn.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+
+  /* LOADING */
+  .loader-wrap { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:60px; gap:16px; }
+  .spinner { width:36px; height:36px; border:3px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin 0.7s linear infinite; }
+  @keyframes spin { to{transform:rotate(360deg)} }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">N</div>
+    <div class="logo-text">NARA <span>360</span></div>
+  </div>
+  <div class="nav-tabs">
+    <a class="nav-tab active" href="index.html">📊 Dashboard</a>
+    <a class="nav-tab" href="calendario.html">📅 Agenda</a>
+  </div>
+  <div class="header-right">
+    <div class="live-badge"><div class="live-dot"></div> En Vivo · Supabase</div>
+    <div class="last-updated" id="lastUpdated">Cargando...</div>
+  </div>
+</header>
+
+<main>
+  <!-- KPIs -->
+  <div class="kpi-grid">
+    <div class="kpi-card purple">
+      <div class="kpi-label">Total Pacientes</div>
+      <div class="kpi-value" id="kpiTotal">—</div>
+      <div class="kpi-sub">Registros únicos en base</div>
+    </div>
+    <div class="kpi-card green">
+      <div class="kpi-label">Clientes Activos</div>
+      <div class="kpi-value" id="kpiActivos">—</div>
+      <div class="kpi-sub" id="kpiActivosPct">— del total</div>
+    </div>
+    <div class="kpi-card yellow">
+      <div class="kpi-label">No Shows / Perdidos</div>
+      <div class="kpi-value" id="kpiPerdidos">—</div>
+      <div class="kpi-sub" id="kpiPerdidosPct">Oportunidad de recuperar</div>
+    </div>
+    <div class="kpi-card red">
+      <div class="kpi-label">Sin Contacto</div>
+      <div class="kpi-value" id="kpiSinContacto">—</div>
+      <div class="kpi-sub">Contacto cero / No agendó</div>
+    </div>
+  </div>
+
+  <!-- Charts -->
+  <div class="charts-grid">
+    <div class="chart-card">
+      <div class="chart-title">Distribución por Estatus</div>
+      <div class="chart-sub">Cómo están los pacientes en este momento</div>
+      <div class="chart-wrap"><canvas id="chartEstatus"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Carga por Psicóloga</div>
+      <div class="chart-sub">Clientes activos asignados por terapeuta</div>
+      <div class="chart-wrap"><canvas id="chartPsicologas"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Table -->
+  <div class="section-header">
+    <div class="section-title">📋 Base de Pacientes</div>
+    <div class="controls">
+      <input type="text" id="searchInput" placeholder="🔍 Buscar por nombre o tel...">
+      <select id="filterEstatus">
+        <option value="">Todos los estatus</option>
+        <option value="Cliente activo">Cliente activo</option>
+        <option value="No agendó">No agendó</option>
+        <option value="Agendó y no llegó">No shows</option>
+        <option value="En proceso y pausó">Pausados</option>
+        <option value="Finalizó proceso">Finalizados</option>
+      </select>
+      <select id="filterPsicologo">
+        <option value="">Todas las psicólogas</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Nombre</th>
+          <th>Teléfono</th>
+          <th>Servicio</th>
+          <th>Psicóloga</th>
+          <th>Estatus</th>
+          <th>Último contacto</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody">
+        <tr><td colspan="7"><div class="loader-wrap"><div class="spinner"></div><span style="color:var(--muted)">Conectando a Supabase...</span></div></td></tr>
+      </tbody>
+    </table>
+    <div class="pagination">
+      <div class="page-info" id="pageInfo">—</div>
+      <div class="page-btns">
+        <button class="page-btn" id="btnPrev" onclick="changePage(-1)">← Anterior</button>
+        <button class="page-btn" id="btnNext" onclick="changePage(1)">Siguiente →</button>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+const SUPA_URL = 'https://lnjedahsquawinemhmfi.supabase.co';
+const SUPA_KEY = 'sb_publishable_vI0L7JI3ZTJbArACHyp6qQ_hLJ3EIVC';
+const { createClient } = supabase;
+const db = createClient(SUPA_URL, SUPA_KEY);
+
+let allPatients = [];
+let allPsicologos = {};
+let filtered = [];
+let currentPage = 1;
+const PER_PAGE = 15;
+
+let chartEstatus, chartPsicologas;
+
+function getBadge(estatus) {
+  if (!estatus) return `<span class="badge badge-gray">Sin estatus</span>`;
+  const e = estatus.toLowerCase();
+  if (e.includes('activo')) return `<span class="badge badge-green">● Activo</span>`;
+  if (e.includes('pausó')) return `<span class="badge badge-yellow">⏸ Pausado</span>`;
+  if (e.includes('finalizó')) return `<span class="badge badge-blue">✓ Finalizado</span>`;
+  if (e.includes('no llegó')) return `<span class="badge badge-red">✗ No-Show</span>`;
+  if (e.includes('no agendó')) return `<span class="badge badge-gray">○ No agendó</span>`;
+  if (e.includes('contacto cero')) return `<span class="badge badge-gray">○ Sin contacto</span>`;
+  return `<span class="badge badge-gray">${estatus}</span>`;
+}
+
+function renderTable() {
+  const tbody = document.getElementById('tableBody');
+  const start = (currentPage - 1) * PER_PAGE;
+  const page = filtered.slice(start, start + PER_PAGE);
+  const total = filtered.length;
+
+  document.getElementById('pageInfo').textContent = `Mostrando ${start+1}–${Math.min(start+PER_PAGE, total)} de ${total} registros`;
+  document.getElementById('btnPrev').disabled = currentPage === 1;
+  document.getElementById('btnNext').disabled = start + PER_PAGE >= total;
+
+  if (page.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--muted)">Sin resultados</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = page.map((p, i) => {
+    const psi = p.psicologo_asignado_id ? (allPsicologos[p.psicologo_asignado_id] || '—') : '—';
+    const tel = p.telefono && !p.telefono.startsWith('SIN_TEL') ? p.telefono : '—';
+    const fecha = p.fecha_ultimo_contacto || '—';
+    return `
+      <tr>
+        <td style="color:var(--muted)">${start + i + 1}</td>
+        <td><b>${p.nombre || 'Sin nombre'}</b></td>
+        <td style="font-family:monospace;color:var(--muted);font-size:12px">${tel}</td>
+        <td><span class="serv-tag">${p.servicio || '—'}</span></td>
+        <td>${psi !== '—' ? `<span class="psy-tag">${psi}</span>` : '<span style="color:var(--muted)">—</span>'}</td>
+        <td>${getBadge(p.estatus)}</td>
+        <td style="color:var(--muted);font-size:12px">${fecha}</td>
+      </tr>`;
+  }).join('');
+}
+
+function applyFilters() {
+  const search = document.getElementById('searchInput').value.toLowerCase();
+  const estatus = document.getElementById('filterEstatus').value.toLowerCase();
+  const psiId = document.getElementById('filterPsicologo').value;
+
+  filtered = allPatients.filter(p => {
+    const nameMatch = !search || (p.nombre||'').toLowerCase().includes(search) || (p.telefono||'').includes(search);
+    const estMatch = !estatus || (p.estatus||'').toLowerCase().includes(estatus);
+    const psiMatch = !psiId || p.psicologo_asignado_id === psiId;
+    return nameMatch && estMatch && psiMatch;
+  });
+
+  currentPage = 1;
+  renderTable();
+}
+
+function changePage(dir) {
+  currentPage += dir;
+  renderTable();
+  window.scrollTo({ top: document.querySelector('.section-header').offsetTop - 20, behavior: 'smooth' });
+}
+
+function renderKPIs(data) {
+  const total = data.length;
+  const activos = data.filter(p => (p.estatus||'').toLowerCase().includes('activo')).length;
+  const perdidos = data.filter(p => {
+    const e = (p.estatus||'').toLowerCase();
+    return e.includes('no llegó') || e.includes('pausó') || e.includes('una vez');
+  }).length;
+  const sinContacto = data.filter(p => {
+    const e = (p.estatus||'').toLowerCase();
+    return e.includes('contacto cero') || e.includes('no agendó');
+  }).length;
+
+  document.getElementById('kpiTotal').textContent = total;
+  document.getElementById('kpiActivos').textContent = activos;
+  document.getElementById('kpiActivosPct').textContent = `${Math.round(activos/total*100)}% del total`;
+  document.getElementById('kpiPerdidos').textContent = perdidos;
+  document.getElementById('kpiPerdidosPct').textContent = `${Math.round(perdidos/total*100)}% recuperables`;
+  document.getElementById('kpiSinContacto').textContent = sinContacto;
+}
+
+function renderCharts(data) {
+  // Chart 1: Estatus distribution
+  const statusMap = {};
+  data.forEach(p => {
+    let key = p.estatus || 'Sin estatus';
+    if (key.length > 24) key = key.substring(0, 24) + '…';
+    statusMap[key] = (statusMap[key] || 0) + 1;
+  });
+  const sorted = Object.entries(statusMap).sort((a,b) => b[1]-a[1]);
+
+  if (chartEstatus) chartEstatus.destroy();
+  chartEstatus = new Chart(document.getElementById('chartEstatus'), {
+    type: 'doughnut',
+    data: {
+      labels: sorted.map(s => s[0]),
+      datasets: [{
+        data: sorted.map(s => s[1]),
+        backgroundColor: ['#10b981','#f59e0b','#3b82f6','#ef4444','#94a3b8','#7c5cfc','#ec4899'],
+        borderWidth: 0
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position:'right', labels: { color:'#94a3b8', font:{size:11}, boxWidth:10 } } }
+    }
+  });
+
+  // Chart 2: Psicólogas activos
+  const psiActivos = {};
+  data.filter(p => (p.estatus||'').toLowerCase().includes('activo')).forEach(p => {
+    const name = p.psicologo_asignado_id ? (allPsicologos[p.psicologo_asignado_id] || 'Sin asignar') : 'Sin asignar';
+    psiActivos[name] = (psiActivos[name] || 0) + 1;
+  });
+  const psiSorted = Object.entries(psiActivos).sort((a,b) => b[1]-a[1]);
+
+  if (chartPsicologas) chartPsicologas.destroy();
+  chartPsicologas = new Chart(document.getElementById('chartPsicologas'), {
+    type: 'bar',
+    data: {
+      labels: psiSorted.map(p => p[0]),
+      datasets: [{
+        label: 'Clientes activos',
+        data: psiSorted.map(p => p[1]),
+        backgroundColor: 'rgba(124,92,252,0.7)',
+        borderRadius: 8,
+        borderSkipped: false
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color:'rgba(255,255,255,0.05)' }, ticks: { color:'#94a3b8' } },
+        y: { grid: { color:'rgba(255,255,255,0.05)' }, ticks: { color:'#94a3b8', precision:0 } }
+      }
+    }
+  });
+}
+
+function populatePsiFilter() {
+  const sel = document.getElementById('filterPsicologo');
+  Object.entries(allPsicologos).sort((a,b) => a[1].localeCompare(b[1])).forEach(([id, nombre]) => {
+    const opt = document.createElement('option');
+    opt.value = id; opt.textContent = nombre;
+    sel.appendChild(opt);
+  });
+}
+
+async function loadData() {
+  // Load psicólogos
+  const { data: psis } = await db.from('psicologos').select('*');
+  psis.forEach(p => { allPsicologos[p.id] = p.nombre; });
+
+  // Load pacientes
+  const { data: patients, error } = await db.from('pacientes').select('*').order('nombre');
+  if (error || !patients) {
+    document.getElementById('tableBody').innerHTML = `<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--red)">Error conectando a la base de datos.</td></tr>`;
+    return;
+  }
+
+  allPatients = patients;
+  filtered = [...allPatients];
+
+  renderKPIs(patients);
+  renderCharts(patients);
+  populatePsiFilter();
+  renderTable();
+
+  const now = new Date();
+  document.getElementById('lastUpdated').textContent = `Actualizado: ${now.toLocaleTimeString('es-MX')}`;
+}
+
+// Event listeners
+document.getElementById('searchInput').addEventListener('input', applyFilters);
+document.getElementById('filterEstatus').addEventListener('change', applyFilters);
+document.getElementById('filterPsicologo').addEventListener('change', applyFilters);
+
+// Init
+loadData();
+// Auto-refresh each 60 seconds
+setInterval(loadData, 60000);
+</script>
+</body>
+</html>
